@@ -1,4 +1,4 @@
-#Edit-Fumen-Libraly for PowerShell
+#Edit-Fumen-Library for PowerShell
 #Ver 0.01 Alpha
 #
 #ご利用は自己責任で
