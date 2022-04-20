@@ -1,5 +1,5 @@
 #Edit-Fumen-Library for PowerShell
-#Ver 0.01 Alpha
+#Ver 0.02 Alpha
 #
 #ご利用は自己責任で
 #
@@ -8,7 +8,7 @@
 #本ライブラリのバージョンを取得
 function Get-EFL-Version
 {
-    return 'Ver 0.01 Alpha'
+    return 'Ver 0.02 Alpha'
 }
 
 #Poll されたデータを解凍
@@ -580,7 +580,7 @@ function Count-Blocks([String]$Tetfu_Raw, [System.Collections.Generic.List[int]]
     $tetfu_table = EditFumen_RawToTable $Tetfu_Raw
     for($i = 0; $i -lt $PageNo.Count; $i++) 
     {
-        [Linq.Enumerable]::Count($tetfu_table[$PageNo[$i] - 1].field_current[0..229] , [Func[object,bool]]{ param($args) [int]($x -ne 0) * 8 })
+        [Linq.Enumerable]::Count($tetfu_table[$PageNo[$i] - 1].field_current[0..229] , [Func[object,bool]]{ param($x) [int]($x -ne 0) * 8 })
     }
     return
 }
