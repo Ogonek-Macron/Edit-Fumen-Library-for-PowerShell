@@ -1,15 +1,16 @@
 #Edit-Fumen-Library for PowerShell
-#Ver 0.02 Alpha
+#Ver 0.03 Alpha
 #
 #ご利用は自己責任で
 #
-#"PIECE" や "Quiz" が含まれるテト譜は未サポート
+#"Quiz" が含まれるテト譜は未サポート
 
 #本ライブラリのバージョンを取得
 function Get-EFL-Version
 {
-    return 'Ver 0.02 Alpha'
+    return 'Ver 0.03 Alpha'
 }
+
 
 #Poll されたデータを解凍
 function Base64ToValue([String]$Str, [Int]$StartIndex, [Int]$Length)
@@ -22,6 +23,7 @@ function Base64ToValue([String]$Str, [Int]$StartIndex, [Int]$Length)
     }
     return $output_value
 }
+
 
 #データを Poll
 function ValueToBase64([Int]$Value, [Int]$Length)
@@ -39,6 +41,80 @@ function ValueToBase64([Int]$Value, [Int]$Length)
     return $output_str
 }
 
+
+#各ピースの形状の一覧を取得する
+function GetPieceShapeTable
+{
+    #0 South
+    #1 West
+    #2 North
+    #3 East
+    $piece_shape_table = @(
+        #1 I
+        (-01, +00, +01, +02),
+        (-10, +00, +10, +20),
+        (-01, +00, +01, +02),
+        (-10, +00, +10, +20),
+
+        #2 L
+        (-01, +00, +01, +09),
+        (-10, +00, +10, +11),
+        (-09, -01, +00, +01),
+        (-11, -10, +00, +10),
+
+        #3 O
+        (+00, +01, +10, +11),
+        (+00, +01, +10, +11),
+        (+00, +01, +10, +11),
+        (+00, +01, +10, +11),
+
+        #4 Z
+        (-01, +00, +10, +11),
+        (-09, +00, +01, +10),
+        (-01, +00, +10, +11),
+        (-09, +00, +01, +10),
+
+        #5 T
+        (-01, +00, +01, +10),
+        (-10, +00, +01, +10),
+        (-10, -01, +00, +01),
+        (-10, -01, +00, +10),
+
+        #6 J
+        (-01, +00, +01, +11),
+        (-10, -09, +00, +10),
+        (-11, -01, +00, +01),
+        (-10, +00, +09, +10),
+
+        #7 S
+        (+00, +01, +09, +10),
+        (-11, -01, +00, +10),
+        (+00, +01, +09, +10),
+        (-11, -01, +00, +10)
+    )
+    return ,$piece_shape_table
+}
+
+
+#テーブル形式に展開したフィールド情報をもとに、ミノを設置する
+function EditTable_LockPiece([System.Collections.Generic.List[int]]$FieldData, [int]$Piece, [int]$Rotation, [int]$Location)
+{
+    if($Piece -ne 0)
+    {
+        #各ピースの形状に関する情報を取得
+        $piece_shape_table = GetPieceShapeTable
+        
+        for($i = 0; $i -lt 4; $i++)
+        {
+            
+            $FieldData[$Location + $piece_shape_table[($Piece - 1) * 4 + $Rotation][$i]] = $Piece
+        }
+
+    }
+    return ,$FieldData
+}
+
+
 #テーブル形式に展開したフィールド情報をもとに、埋まっている段を消去する
 function EditTable_ClearFilledLine([System.Collections.Generic.List[int]]$FieldData)
 {
@@ -54,6 +130,7 @@ function EditTable_ClearFilledLine([System.Collections.Generic.List[int]]$FieldD
     return ,$FieldData
 }
 
+
 #テーブル形式に展開したフィールド情報をもとに、せり上げる
 function EditTable_Raise([System.Collections.Generic.List[int]]$FieldData)
 {
@@ -61,6 +138,7 @@ function EditTable_Raise([System.Collections.Generic.List[int]]$FieldData)
     $FieldData.AddRange([int[]]@(0) * 10)
     return ,$FieldData
 }
+
 
 #テーブル形式に展開したフィールド情報をもとに、左右を反転させる
 function EditTable_Mirror([System.Collections.Generic.List[int]]$FieldData)
@@ -72,13 +150,15 @@ function EditTable_Mirror([System.Collections.Generic.List[int]]$FieldData)
     return ,$FieldData
 }
 
+
 #フィールドの更新
-function EditTable_UpdateField([System.Collections.Generic.List[int]]$FieldData, [int]$Flag_Lock, [int]$Flag_Raise, [int]$Flag_Mirror)
+function EditTable_UpdateField([System.Collections.Generic.List[int]]$FieldData, [int]$Piece, [int]$Rotation, [int]$Location, [int]$Flag_Lock, [int]$Flag_Raise, [int]$Flag_Mirror)
 {
     if($Flag_Lock -eq 1)
     {
         #置く (未対応)
-    
+        $FieldData = EditTable_LockPiece $FieldData $Piece $Rotation $Location
+
         #消す
         $FieldData = EditTable_ClearFilledLine $FieldData
     
@@ -97,6 +177,7 @@ function EditTable_UpdateField([System.Collections.Generic.List[int]]$FieldData,
 
     return ,$FieldData
 }
+
 
 #URL 形式のデータをテーブルに展開する
 function EditFumen_RawToTable([String]$Tetfu)
@@ -244,7 +325,7 @@ function EditFumen_RawToTable([String]$Tetfu)
 
         #フィールドの更新
         $field_prev = New-Object System.Collections.Generic.List[int]([System.Collections.Generic.List[int[]]]$field_current)
-        $field_prev = EditTable_UpdateField $field_prev $flag_lock $flag_raise $flag_mirror
+        $field_prev = EditTable_UpdateField $field_prev $piece $rotation $location $flag_lock $flag_raise $flag_mirror
 
 
 
@@ -266,8 +347,6 @@ function EditFumen_RawToTable([String]$Tetfu)
 
     return ,$data_list_table
 }
-
-
 
 
 #テーブル形式のデータをエンコードする
@@ -560,7 +639,7 @@ function Get-Mirror-Flag([String]$Tetfu_Raw, [System.Collections.Generic.List[in
 }
 
 
-#指定したページの高さを取得する (リストで指定可能)
+#指定したページの地形の高さを取得する (リストで指定可能)
 function Get-Height([String]$Tetfu_Raw, [System.Collections.Generic.List[int]]$PageNo = [System.Collections.Generic.List[int]]::new([int[]](1..(Count $Tetfu_Raw))))
 {
     $tetfu_table = EditFumen_RawToTable $Tetfu_Raw
@@ -574,6 +653,19 @@ function Get-Height([String]$Tetfu_Raw, [System.Collections.Generic.List[int]]$P
 }
 
 
+#指定したページをフラグに基づいて処理した後に残る地形の高さを取得する (リストで指定可能)
+function Get-Height-Updated([String]$Tetfu_Raw, [System.Collections.Generic.List[int]]$PageNo = [System.Collections.Generic.List[int]]::new([int[]](1..(Count $Tetfu_Raw))))
+{
+    $tetfu_table = EditFumen_RawToTable $Tetfu_Raw
+
+    for($i = 0; $i -lt $PageNo.Count; $i++) 
+    {
+        (23 - [math]::Floor($tetfu_table[$PageNo[$i] - 1].field_updated.FindIndex({$args -ne 0}) / 10)) % 24
+    }  
+
+   return
+}
+
 #指定したページに置かれているブロック数を取得する (リストで指定可能)
 function Count-Blocks([String]$Tetfu_Raw, [System.Collections.Generic.List[int]]$PageNo = [System.Collections.Generic.List[int]]::new([int[]](1..(Count $Tetfu_Raw))))
 {
@@ -581,6 +673,18 @@ function Count-Blocks([String]$Tetfu_Raw, [System.Collections.Generic.List[int]]
     for($i = 0; $i -lt $PageNo.Count; $i++) 
     {
         [Linq.Enumerable]::Count($tetfu_table[$PageNo[$i] - 1].field_current[0..229] , [Func[object,bool]]{ param($x) [int]($x -ne 0) * 8 })
+    }
+    return
+}
+
+
+#指定したページをフラグに基づいて処理した後に置かれているブロック数を取得する (リストで指定可能)
+function Count-Blocks-In-Updated([String]$Tetfu_Raw, [System.Collections.Generic.List[int]]$PageNo = [System.Collections.Generic.List[int]]::new([int[]](1..(Count $Tetfu_Raw))))
+{
+    $tetfu_table = EditFumen_RawToTable $Tetfu_Raw
+    for($i = 0; $i -lt $PageNo.Count; $i++) 
+    {
+        [Linq.Enumerable]::Count($tetfu_table[$PageNo[$i] - 1].field_updated[0..229] , [Func[object,bool]]{ param($x) [int]($x -ne 0) * 8 })
     }
     return
 }
@@ -601,7 +705,7 @@ function Set-To-Gray([String]$Tetfu_Raw, [System.Collections.Generic.List[int]]$
 
         #フィールドの更新
         $field_data = New-Object System.Collections.Generic.List[int]([System.Collections.Generic.List[int[]]]$tetfu_table[$PageNo[$i] - 1].field_current)
-        $field_data = EditTable_UpdateField $field_data $tetfu_table[$PageNo[$i] - 1].flag_lock $tetfu_table[$PageNo[$i] - 1].flag_raise $tetfu_table[$PageNo[$i] - 1].flag_mirror
+        $field_data = EditTable_UpdateField $field_data $tetfu_table[$PageNo[$i] - 1].piece $tetfu_table[$PageNo[$i] - 1].rotation $tetfu_table[$PageNo[$i] - 1].location $tetfu_table[$PageNo[$i] - 1].flag_lock $tetfu_table[$PageNo[$i] - 1].flag_raise $tetfu_table[$PageNo[$i] - 1].flag_mirror
 
         $tetfu_table[$PageNo[$i] - 1].field_updated = $field_data
     }
@@ -623,9 +727,109 @@ function Clear-Filled-Line([String]$Tetfu_Raw, [System.Collections.Generic.List[
         
         #フィールドの更新
         $field_data = New-Object System.Collections.Generic.List[int]([System.Collections.Generic.List[int[]]]$tetfu_table[$PageNo[$i] - 1].field_current)
-        $field_data = EditTable_UpdateField $field_data $tetfu_table[$PageNo[$i] - 1].flag_lock $tetfu_table[$PageNo[$i] - 1].flag_raise $tetfu_table[$PageNo[$i] - 1].flag_mirror
+        $field_data = EditTable_UpdateField $field_data $tetfu_table[$PageNo[$i] - 1].piece $tetfu_table[$PageNo[$i] - 1].rotation $tetfu_table[$PageNo[$i] - 1].location $tetfu_table[$PageNo[$i] - 1].flag_lock $tetfu_table[$PageNo[$i] - 1].flag_raise $tetfu_table[$PageNo[$i] - 1].flag_mirror
         
         $tetfu_table[$PageNo[$i] - 1].field_updated = $field_data
+    }
+
+    $raw_str = EditFumen_TableToRaw $tetfu_table
+    return $raw_str
+}
+
+
+#指定したページのミノを接着フラグにかかわらず設置する (リストで指定可能)
+function Lock-Piece([String]$Tetfu_Raw, [System.Collections.Generic.List[int]]$PageNo = [System.Collections.Generic.List[int]]::new([int[]](1..(Count $Tetfu_Raw))))
+{
+    $tetfu_table = EditFumen_RawToTable $Tetfu_Raw
+    
+    for($i = 0; $i -lt $PageNo.Count; $i++) 
+    {
+        #ミノ設置
+        $tetfu_table[$PageNo[$i] - 1].field_current = EditTable_LockPiece $tetfu_table[$PageNo[$i] - 1].field_current $tetfu_table[$PageNo[$i] - 1].piece $tetfu_table[$PageNo[$i] - 1].rotation $tetfu_table[$PageNo[$i] - 1].location
+        
+        $tetfu_table[$PageNo[$i] - 1].piece = 0
+        $tetfu_table[$PageNo[$i] - 1].rotation = 0
+        $tetfu_table[$PageNo[$i] - 1].location = 0
+
+        #フィールドの更新
+        $field_data = New-Object System.Collections.Generic.List[int]([System.Collections.Generic.List[int[]]]$tetfu_table[$PageNo[$i] - 1].field_current)
+        $field_data = EditTable_UpdateField $field_data $tetfu_table[$PageNo[$i] - 1].piece $tetfu_table[$PageNo[$i] - 1].rotation $tetfu_table[$PageNo[$i] - 1].location $tetfu_table[$PageNo[$i] - 1].flag_lock $tetfu_table[$PageNo[$i] - 1].flag_raise $tetfu_table[$PageNo[$i] - 1].flag_mirror
+        
+        $tetfu_table[$PageNo[$i] - 1].field_updated = $field_data
+    }
+
+    $raw_str = EditFumen_TableToRaw $tetfu_table
+    return $raw_str
+}
+
+
+#指定したページのフィールドをフラグにかかわらずせり上げる (リストで指定可能)
+function Raise-Field([String]$Tetfu_Raw, [System.Collections.Generic.List[int]]$PageNo = [System.Collections.Generic.List[int]]::new([int[]](1..(Count $Tetfu_Raw))))
+{
+    $tetfu_table = EditFumen_RawToTable $Tetfu_Raw
+    
+    for($i = 0; $i -lt $PageNo.Count; $i++) 
+    {
+        #ミノ設置
+        $tetfu_table[$PageNo[$i] - 1].field_current = EditTable_Raise $tetfu_table[$PageNo[$i] - 1].field_current
+
+        $tetfu_table[$PageNo[$i] - 1].flag_raise = 0
+        
+        #フィールドの更新
+        $field_data = New-Object System.Collections.Generic.List[int]([System.Collections.Generic.List[int[]]]$tetfu_table[$PageNo[$i] - 1].field_current)
+        $field_data = EditTable_UpdateField $field_data $tetfu_table[$PageNo[$i] - 1].piece $tetfu_table[$PageNo[$i] - 1].rotation $tetfu_table[$PageNo[$i] - 1].location $tetfu_table[$PageNo[$i] - 1].flag_lock $tetfu_table[$PageNo[$i] - 1].flag_raise $tetfu_table[$PageNo[$i] - 1].flag_mirror
+        
+        $tetfu_table[$PageNo[$i] - 1].field_updated = $field_data
+    }
+
+    $raw_str = EditFumen_TableToRaw $tetfu_table
+    return $raw_str
+}
+
+
+#指定したページのフィールドをフラグにかかわらず左右反転する (リストで指定可能)
+function Mirror-Field([String]$Tetfu_Raw, [System.Collections.Generic.List[int]]$PageNo = [System.Collections.Generic.List[int]]::new([int[]](1..(Count $Tetfu_Raw))))
+{
+    $tetfu_table = EditFumen_RawToTable $Tetfu_Raw
+    
+    for($i = 0; $i -lt $PageNo.Count; $i++) 
+    {
+        #ミノ設置
+        $tetfu_table[$PageNo[$i] - 1].field_current = EditTable_Mirror $tetfu_table[$PageNo[$i] - 1].field_current
+
+        $tetfu_table[$PageNo[$i] - 1].flag_mirror = 0
+        
+        #フィールドの更新
+        $field_data = New-Object System.Collections.Generic.List[int]([System.Collections.Generic.List[int[]]]$tetfu_table[$PageNo[$i] - 1].field_current)
+        $field_data = EditTable_UpdateField $field_data $tetfu_table[$PageNo[$i] - 1].piece $tetfu_table[$PageNo[$i] - 1].rotation $tetfu_table[$PageNo[$i] - 1].location $tetfu_table[$PageNo[$i] - 1].flag_lock $tetfu_table[$PageNo[$i] - 1].flag_raise $tetfu_table[$PageNo[$i] - 1].flag_mirror
+        
+        $tetfu_table[$PageNo[$i] - 1].field_updated = $field_data
+    }
+
+    $raw_str = EditFumen_TableToRaw $tetfu_table
+    return $raw_str
+}
+
+
+#指定したページをフラグに基づいて操作した後の地形に置き換える
+function Update-Field([String]$Tetfu_Raw, [System.Collections.Generic.List[int]]$PageNo = [System.Collections.Generic.List[int]]::new([int[]](1..(Count $Tetfu_Raw))))
+{
+    $tetfu_table = EditFumen_RawToTable $Tetfu_Raw
+    
+    for($i = 0; $i -lt $PageNo.Count; $i++) 
+    {
+        #フィールドの更新
+        $field_data = New-Object System.Collections.Generic.List[int]([System.Collections.Generic.List[int[]]]$tetfu_table[$PageNo[$i] - 1].field_current)
+        $field_data = EditTable_UpdateField $field_data $tetfu_table[$PageNo[$i] - 1].piece $tetfu_table[$PageNo[$i] - 1].rotation $tetfu_table[$PageNo[$i] - 1].location $tetfu_table[$PageNo[$i] - 1].flag_lock $tetfu_table[$PageNo[$i] - 1].flag_raise $tetfu_table[$PageNo[$i] - 1].flag_mirror
+        
+        $tetfu_table[$PageNo[$i] - 1].field_current = $field_data
+        $tetfu_table[$PageNo[$i] - 1].field_updated = $field_data
+        
+        $tetfu_table[$PageNo[$i] - 1].piece = 0
+        $tetfu_table[$PageNo[$i] - 1].rotation = 0
+        $tetfu_table[$PageNo[$i] - 1].location = 0
+        $tetfu_table[$PageNo[$i] - 1].flag_raise = 0
+        $tetfu_table[$PageNo[$i] - 1].flag_mirror = 0
     }
 
     $raw_str = EditFumen_TableToRaw $tetfu_table
@@ -645,7 +849,7 @@ function Clear-Field([String]$Tetfu_Raw, [System.Collections.Generic.List[int]]$
         
         #フィールドの更新
         $field_data = New-Object System.Collections.Generic.List[int]([System.Collections.Generic.List[int[]]]$tetfu_table[$PageNo[$i] - 1].field_current)
-        $field_data = EditTable_UpdateField $field_data $tetfu_table[$PageNo[$i] - 1].flag_lock $tetfu_table[$PageNo[$i] - 1].flag_raise $tetfu_table[$PageNo[$i] - 1].flag_mirror
+        $field_data = EditTable_UpdateField $field_data $tetfu_table[$PageNo[$i] - 1].piece $tetfu_table[$PageNo[$i] - 1].rotation $tetfu_table[$PageNo[$i] - 1].location $tetfu_table[$PageNo[$i] - 1].flag_lock $tetfu_table[$PageNo[$i] - 1].flag_raise $tetfu_table[$PageNo[$i] - 1].flag_mirror
         
         $tetfu_table[$PageNo[$i] - 1].field_updated = $field_data
     }
