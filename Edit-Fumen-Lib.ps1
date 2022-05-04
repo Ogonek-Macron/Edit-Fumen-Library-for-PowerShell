@@ -1,5 +1,5 @@
 #Edit-Fumen-Library for PowerShell
-#Ver 0.04 Alpha
+#Ver 0.05 Alpha
 #
 #ご利用は自己責任で
 #
@@ -12,7 +12,7 @@ using namespace System.Collections.Generic
 #本ライブラリのバージョンを取得
 function Get-EFL-Version
 {
-    return 'Ver 0.04 Alpha'
+    return 'Ver 0.05 Alpha'
 }
 
 
@@ -215,7 +215,6 @@ function EditTable_UpdateField([List[int]]$FieldData, [int]$Piece, [int]$Rotatio
 function EditFumen_RawToTable([String]$Tetfu)
 {
     #コメントの詳細な編集には未対応
-    #ミノの設置には未対応
     #Quiz 機能には非対応
     #
     #
@@ -385,14 +384,13 @@ function EditFumen_RawToTable([String]$Tetfu)
 function EditFumen_TableToRaw([List[object]]$Data_List_Table)
 {
     #コメントの詳細な編集には未対応
-    #vh 関連は仮対応
     #
     #1 ページ目用初期設定
 
     $field_prev = [List[int]](@(0) * 240)
     $comment_prev_length = 0
     $comment_prev = ''
-    #$vh_counter = 0
+    $vh_counter = -1
 
     #全体のテーブル
     $encoder_table = New-Object List[System.Text.StringBuilder]
@@ -463,13 +461,63 @@ function EditFumen_TableToRaw([List[object]]$Data_List_Table)
 
         #Encode
         $building_str = New-Object System.Text.StringBuilder
-        #フィールド部分 (後で vh の対応をする)
-        $building_str.Append(($field_value_list | ForEach-Object {ValueToBase64 $PSItem 2}) -join '') | Out-Null
-        #vh 仮対応コード
-        if($field_value_list.Count -eq 1)
+        $is_vh = (($field_value_list | ForEach-Object {ValueToBase64 $PSItem 2}) -join '') -eq 'vh'
+
+        #フィールド部分
+        #vh 区間の起点の場合
+        if(($vh_counter -eq -1) -and $is_vh)
         {
-            $building_str.Append('A') | Out-Null
+            $vh_start = $page
+            $vh_counter++
         }
+        #vh 区間内 (終点含む) の場合
+        elseif(($vh_counter -ge 0) -and $is_vh)
+        {
+            $vh_counter++
+        }
+        #非 vh 区間の起点の場合
+        elseif(($vh_counter -ge 0) -and (-not $is_vh))
+        {
+            #vh 開始地点に vh の情報を挿入する
+            $encoder_table[$vh_start].Insert(0, 'vh' + (ValueToBase64 $vh_counter 1)) | Out-Null
+            #vh カウンターをリセットする
+            $vh_counter = -1
+            #現ページのフィールド
+            $building_str.Append(($field_value_list | ForEach-Object {ValueToBase64 $PSItem 2}) -join '') | Out-Null
+        }
+        #非 vh 区間内 (終点含む) の場合
+        else
+        {
+            #現ページのフィールド
+            $building_str.Append(($field_value_list | ForEach-Object {ValueToBase64 $PSItem 2}) -join '') | Out-Null
+        }
+
+        #vh/ 特別処理
+        if($vh_counter -eq 63)
+        {
+            #vh 開始地点に vh の情報を挿入する
+            $encoder_table[$vh_start].Insert(0, 'vh/') | Out-Null
+            #vh カウンターをリセットする
+            $vh_counter = -1
+        }
+        #最終ページ例外処理
+        #処理が二重にならないように elseif
+        elseif(($page -eq ($Data_List_Table.Count - 1)) -and $is_vh -and ($vh_counter -ne 0))
+        {
+            #vh 開始地点に vh の情報を挿入する
+            $encoder_table[$vh_start].Insert(0, 'vh' + (ValueToBase64 $vh_counter 1)) | Out-Null
+            #vh カウンターを念のためリセットする
+            $vh_counter = -1
+        }
+        #最後 1 ページしかない場合はエラー回避が必要
+        elseif(($page -eq ($Data_List_Table.Count - 1)) -and $is_vh -and ($vh_counter -eq 0))
+        {
+            #vh 開始地点に vh の情報を挿入する
+            $building_str.Append('vhA') | Out-Null
+            #vh カウンターを念のためリセットする
+            $vh_counter = -1
+        }
+
         #ミノ・フラグ
         $building_str.Append((ValueToBase64 ($piece + $rotation * 8 + $location * 32 + $flag_raise * 7680 + $flag_mirror * 15360 + $flag_color * 30720 + $flag_comment * 61440 + (($flag_lock + 1) % 2) * 122880) 3)) | Out-Null
         #コメント
@@ -761,12 +809,19 @@ function Get-Piece-Info([String]$Tetfu_Raw, [List[int]]$PageNo = [List[int]]::ne
     
     for($i = 0; $i -lt $PageNo.Count; $i++)
     {
-        $piece_str = '_ILOZTJSX'.Substring($tetfu_table[$PageNo[$i] - 1].piece, 1)
-        $rotation_str = ('Reverse','Left','Spawn','Right')[$tetfu_table[$PageNo[$i] - 1].rotation]
-        $x_val = $tetfu_table[$PageNo[$i] - 1].location % 10
-        $y_val = 22 - [Math]::Floor($tetfu_table[$PageNo[$i] - 1].location / 10)
-        
-        $piece_str + '-' + $rotation_str + '(' + $x_val.ToString() + ',' + $y_val.ToString() + ')'
+        if($tetfu_table[$PageNo[$i] - 1].piece)
+        {
+            $piece_str = '_ILOZTJSX'.Substring($tetfu_table[$PageNo[$i] - 1].piece, 1)
+            $rotation_str = ('Reverse','Right','Spawn','Left')[$tetfu_table[$PageNo[$i] - 1].rotation]
+            $x_val = $tetfu_table[$PageNo[$i] - 1].location % 10
+            $y_val = 22 - [Math]::Floor($tetfu_table[$PageNo[$i] - 1].location / 10)
+            
+            $piece_str + '-' + $rotation_str + '(' + $x_val.ToString() + ',' + $y_val.ToString() + ')'
+        }
+        else
+        {
+            'None'
+        }
     }
 }
 
